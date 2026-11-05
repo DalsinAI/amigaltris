@@ -25,6 +25,7 @@ using namespace std;
   typedef uint32_t uint;
 #endif
 #include <math.h>
+#include <time.h>
 #include <dirent.h>
 #include <list>
 #include <string>
