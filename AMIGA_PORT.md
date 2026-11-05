@@ -12,7 +12,10 @@ sha256 482150495f9d87bb139d5af1abec7030383c37fdb3e75a45e9bad67ead798eda.
 It is the "upstream" commit (tag upstream-2.0.4) of this repository; the
 port is on branch team2/ltris-amiga.
 
-Status: builds and links; not yet run on an Amiga.
+Status: first lab run (Instance-45, a window): it loaded (45-60 s) and
+the menu worked, but no key reached the game itself and it ran slowly.
+The second build (below) fixes both, as far as can be seen without the
+lab; not yet run again.
 
 
 What you need
@@ -120,6 +123,20 @@ What was changed
 - libgame/bowl.h, tetris.c: prototypes for three functions used before
   they are defined (GCC 14 and later refuse implicit declarations).
 - src/tools.h: <time.h> for main.cpp's time().
+- src/sdl.cpp, sdl.h, view.cpp (after the first lab run): the game's keys
+  are read from a key state (SDL_GetKeyboardState) and View::run took one
+  event per frame. Now the keys are also followed from the key events
+  (an SDL event watch, else every event polled), a key tapped between
+  two frames still counts for one, and View::run takes the first event
+  the game cares about each frame and drops floods of others (window,
+  joystick axis, old mouse motion), so Esc and F6 get through.
+- src/sdl.cpp, sdl.h: Font::write rendered every text twice (with its
+  shadow) through FreeType and uploaded two new textures, every frame:
+  the score, level and lines, the menu. Now each font keeps its last 96
+  texts as textures (dropped when the renderer is made again).
+- src/view.cpp: "Loading..." in the window while the theme loads, and on
+  the console the time each part of the start takes (window, theme,
+  menus, game) and the frame rate every 100 frames.
 
 Endianness: the settings and highscores are text files (key=value), the
 figures file is text, the pictures and sounds go through SDL_image and
@@ -130,7 +147,8 @@ needed swapping.
 Known limits
 ------------
 
-- Not yet run. To check first: that the opengpu renderer gives target
+- To check first: the console's start-up times and frames a second;
+  that the arrows, Up, 1, Space, Del, Esc and F6 work in a game. Then that the opengpu renderer gives target
   textures (the console says "Renderer: ..."; if the game is black or the
   bowls have no frames, try SetEnv SDL_RENDER_DRIVER software), the speed
   of the menu's fade and of the fonts (SDL_ttf renders on the 68k), and
