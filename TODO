@@ -1,0 +1,21 @@
+- font colors in theme.ini
+- multiple block sets that rotate each level
+- extra menu item to show all hiscores
+
+Changes to make ltris1 core work:
+- disable all SDL.h includes, except in sdl.h: change SDL.h include to SDL2.h
+- define compat macros:
+	#define SDLK_LAST SDL_NUM_SCANCODES
+	#define SDL_FULLSCREEN 0
+	#define SDL_SRCCOLORKEY 0
+	#define SDL_NOEVENT 0
+	#define SDL_GetKeyState SDL_GetKeyboardState
+- empty all functions in sdl.c but create dummy surfaces and dummy font to
+  allow access of w and h attributes
+- rename Font to OldFont
+- turn ALIGN_X_LEFT,... into macros and only set if not yet defined 
+- disable bowl_quick_game() in bowls.h
+- add ViewBowlInfo and set sounds and cleared lines
+- set full bowl content to vbi on game over
+- disable gamepad stuff in sdl.c and tetris.c
+
