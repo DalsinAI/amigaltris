@@ -442,7 +442,7 @@ bool VGame::isDemo()
 void VGame::renderBackground(uint wid)
 {
 	renderer.setTarget(background);
-	theme.wallpapers[wid % theme.numWallpapers].copy();
+	theme.getWallpaper(wid).copy();
 	renderer.clearTarget();
 
 	int tsize = vbowls[0].blockSize;

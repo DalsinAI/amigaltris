@@ -28,7 +28,11 @@ void Theme::load(string name, Renderer &r)
 
 	path = string(DATADIR) + "/themes/" + name;
 
+#ifdef __amigaos__
+	if (!dirExists(path)) /* AmigaDOS won't fopen() a drawer */
+#else
 	if (!fileExists(path))
+#endif
 		_logerr("CRITICAL ERROR: theme %s not found. We continue but most likely it will crash...\n",path.c_str());
 	_loginfo("Loading theme %s\n",path.c_str());
 
@@ -70,6 +74,20 @@ void Theme::load(string name, Renderer &r)
 	/* wallpapers */
 	numWallpapers = 0;
 	string wfname = path + "/wallpaper0.jpg";
+#ifdef __amigaos__
+	loadedWallpaper = -1;
+	while (fileExists(wfname)) {
+		wallpaperNames[numWallpapers] = wfname;
+		numWallpapers++;
+		if (numWallpapers == MAXWALLPAPERS)
+			break;
+		wfname = path + "/wallpaper" + to_string(numWallpapers) + ".jpg";
+	}
+	if (numWallpapers == 0) {
+		wallpaperNames[0] = stdPath + "/wallpaper0.jpg";
+		numWallpapers = 1;
+	}
+#else
 	while (fileExists(wfname)) {
 		wallpapers[numWallpapers].load(wfname);
 		wallpapers[numWallpapers].setBlendMode(0);
@@ -83,6 +101,7 @@ void Theme::load(string name, Renderer &r)
 		wallpapers[0].setBlendMode(0);
 		numWallpapers = 1;
 	}
+#endif
 
 	/* blocks -- each valid set is in a row */
 	blocks.load(testRc(path,"blocks.png"));
@@ -111,4 +130,20 @@ void Theme::vbaLoadFonts(uint bsize)
 	vbaFontSmall.setColor(fontColorNormal);
 	vbaFontTiny.load(testRc(path,"f_normal.otf"), 6*bsize/10);
 	vbaFontTiny.setColor(fontColorNormal);
+}
+
+/** Return wallpaper @wid (modulo the number of wallpapers). */
+Texture &Theme::getWallpaper(uint wid)
+{
+	wid %= numWallpapers;
+#ifdef __amigaos__
+	if (loadedWallpaper != (int)wid) {
+		wallpapers[0].load(wallpaperNames[wid]);
+		wallpapers[0].setBlendMode(0);
+		loadedWallpaper = wid;
+	}
+	return wallpapers[0];
+#else
+	return wallpapers[wid];
+#endif
 }

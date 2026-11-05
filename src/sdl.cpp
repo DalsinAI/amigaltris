@@ -40,6 +40,34 @@ int Renderer::create(const string &title, int _w, int _h, int _full)
 	h = _h;
 
 	_loginfo("Creating window with size %dx%d (%s)\n",w,h,_full?"fullscreen":"window");
+#ifdef __amigaos__
+	/* A screen of the window's own size (as SDL_WINDOW_FULLSCREEN gives
+	 * on OpenGPU), not the Workbench's desktop mode. */
+	mw = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
+				SDL_WINDOWPOS_CENTERED, w, h,
+				_full ? SDL_WINDOW_FULLSCREEN : 0);
+	if (mw == NULL) {
+		_logsdlerr();
+		return 0;
+	}
+	/* The game draws into target textures: ask for a renderer that has
+	 * them (opengpu), else SDL's software renderer, which always does. */
+	mr = SDL_CreateRenderer(mw, -1, SDL_RENDERER_ACCELERATED |
+					SDL_RENDERER_TARGETTEXTURE);
+	if (mr == NULL) {
+		_logsdlerr();
+		mr = SDL_CreateRenderer(mw, -1, SDL_RENDERER_SOFTWARE |
+					SDL_RENDERER_TARGETTEXTURE);
+	}
+	if (mr == NULL) {
+		_logsdlerr();
+		ret = 0;
+	} else {
+		SDL_RendererInfo info;
+		if (SDL_GetRendererInfo(mr, &info) == 0)
+			_loginfo("Renderer: %s\n", info.name);
+	}
+#else
  	if (_full) {
 		mw = SDL_CreateWindow(title.c_str(), 0,0,0,0,0);
 		if (mw)
@@ -55,6 +83,7 @@ int Renderer::create(const string &title, int _w, int _h, int _full)
 		_logsdlerr();
 		ret = 0;
 	}
+#endif
 	mrc = mr;
 
 	/* back to black */
@@ -287,7 +316,9 @@ int Texture::createShadow(Texture &img)
 	img.copy(0,0);
 
 	/* change and apply */
-	Uint32 pixels[w*h];
+	/* on the heap: a stack array of w*h words overruns a 68k's stack */
+	vector<Uint32> pixbuf(w*h);
+	Uint32 *pixels = pixbuf.data();
 	int pitch = w*sizeof(Uint32);
 	Uint8 r,g,b,a;
 	Uint32 pft = 0;

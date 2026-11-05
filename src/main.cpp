@@ -27,6 +27,18 @@ using namespace std;
 #include "vgame.h"
 #include "view.h"
 
+#ifdef __amigaos__
+#include "amiga_screens.h"
+/* OpenGPU's SDL2.module leaves empty "SDL" screens behind after a full
+ * screen; this is made before the renderer (which starts SDL) and goes
+ * after it (which quits SDL), so it sees the screens from before and
+ * deals with the ones left over. */
+static struct AmigaScreensGuard {
+	AmigaScreensGuard() { amiga_screens_snapshot(); }
+	~AmigaScreensGuard() { amiga_screens_close_leftovers(); }
+} amigaScreensGuard;
+#endif
+
 /* global resources for easier access across all objects */
 Renderer renderer;
 VConfig vconfig;

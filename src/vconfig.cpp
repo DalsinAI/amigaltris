@@ -33,6 +33,11 @@ VConfig::VConfig() // @suppress("Class members should be properly initialized")
 	controls[0].sdrop = SDL_SCANCODE_DOWN;
 	controls[0].hdrop = SDL_SCANCODE_END;
 	controls[0].hold = SDL_SCANCODE_DELETE;
+#ifdef __amigaos__
+	/* An Amiga keyboard has no End: Space drops, cursor up rotates. */
+	controls[0].rrot = SDL_SCANCODE_UP;
+	controls[0].hdrop = SDL_SCANCODE_SPACE;
+#endif
 	controls[1].lshift = SDL_SCANCODE_A;
 	controls[1].rshift = SDL_SCANCODE_D;
 	controls[1].lrot = SDL_SCANCODE_W;
@@ -75,10 +80,16 @@ VConfig::VConfig() // @suppress("Class members should be properly initialized")
 	volume = 50;
 	audiobuffersize = 1024;
 	channels = 16;
+#ifdef __amigaos__
+	channels = 8; /* mixed by the 68k */
+#endif
 
 	/* graphics */
 	animations = 1;
 	windowmode = WM_FULLSCREEN;
+#ifdef __amigaos__
+	windowmode = WM_SMALL; /* a 640x480 window on the Workbench */
+#endif
 	fps = 1;
 	showfps = 0;
 	smoothdrop = 1;

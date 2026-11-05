@@ -46,6 +46,12 @@ class Theme {
 
 	Texture wallpapers[MAXWALLPAPERS];
 	uint numWallpapers;
+#ifdef __amigaos__
+	/* Only one wallpaper is loaded at a time (into wallpapers[0]):
+	 * ten of them as textures would be far too much memory. */
+	string wallpaperNames[MAXWALLPAPERS];
+	int loadedWallpaper;
+#endif
 	Texture blocks; /* for pieces */
 	uint numBlocks;
 	uint blockSize;
@@ -74,6 +80,7 @@ public:
 		stdPath = string(DATADIR) + "/themes/Standard";
 	}
 	void load(string name, Renderer &r);
+	Texture &getWallpaper(uint wid);
 	void vbaLoadFonts(uint bsize);
 };
 

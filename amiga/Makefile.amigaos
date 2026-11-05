@@ -1,0 +1,106 @@
+# LTris 2 for AmigaOS 3.x, 68040/68060 + FPU, on OpenGPU's SDL 2.
+#
+#   make -f amiga/Makefile.amigaos -j2 dist \
+#        STOVE=/path/to/openamigagcc-16.2.0-open4 \
+#        NDK=/path/to/OpenNDK/Include_H SDL2KIT=/path/to/opengpu-sdk
+#
+# STOVE is GFOpenAmigaGCC 16.2.0-open4 or later. SDL2KIT is the OpenGPU
+# developer kit: libSDL2.a, libSDL2_image.a and libSDL2_mixer.a (the
+# program's halves of SDL2.module, SDL2_image.module and SDL2_mixer.module)
+# and libSDL2_ttf.a (SDL_ttf with FreeType, inside the program).
+#
+# The theme's 1920x1080 pictures are made 800x600 for the drawer on the
+# build machine (amiga/tools/shrink_theme.py, Python 3 with Pillow):
+# the game stretches them to its window anyway, and ten of them at full
+# size would be 80 MB of textures.
+# 'make ... dist' makes the drawer dist/LTris (+ dist/LTris.info).
+
+STOVE   ?= $(HOME)/CradleLab/toolchain/openamigagcc-16.2.0-open4-x86_64-linux
+NDK     ?= $(HOME)/CradleLab/gfopensdk/OpenNDK/Include_H
+SDL2KIT ?= /mnt/amigachrome/team2/deps/opengpu-sdk
+PYTHON  ?= python3
+CC      = $(STOVE)/bin/m68k-amigaos-gcc
+CXX     = $(STOVE)/bin/m68k-amigaos-g++
+CPU     ?= -m68040 -m68881
+# -fno-tree-loop-distribute-patterns: GCC 16's loop miscompile (the kit's
+# sdl2-config gives it for GCC 16 too).
+OPT     ?= -O2 -fomit-frame-pointer -fno-tree-loop-distribute-patterns
+
+# What configure would give: no NLS; data, settings and highscores in the
+# program's drawer (amiga/amiga_progdir.c).
+DIRS    = -DDATADIR='amiga_progdir()' -DCONFIGDIR='amiga_progdir()' \
+          -DHISCOREDIR='amiga_progdir()' -DSRC_DIR='amiga_progdir()' \
+          -DCONFIG_DIR_NAME='amiga_progdir()' -DHI_DIR='amiga_progdir()'
+DEFS    = -D__amigaos__ -DNDEBUG -DPACKAGE='"ltris2"' -DPACKAGE_NAME='"LTris2"' \
+          -DPACKAGE_VERSION='"2.0.4"' -DVERSION='"2.0.4"' $(DIRS) \
+          -include amiga/amiga_port.h
+INC     = -I. -Iamiga -I$(SDL2KIT)/include -I$(SDL2KIT)/include/SDL2
+CFLAGS  = -noixemul $(OPT) $(CPU) -fno-common $(DEFS) $(INC) -w
+CXXFLAGS= -noixemul $(OPT) $(CPU) -std=gnu++11 $(DEFS) $(INC) -Wall -Wno-sign-compare \
+          -Wno-unused-variable -Wno-unused-but-set-variable
+LDFLAGS = -noixemul $(CPU)
+LIBS    = -L$(SDL2KIT)/lib -lSDL2_ttf -lSDL2_image -lSDL2_mixer -lSDL2 -lm
+
+BUILD   = build/amigaos
+OBJDIR  = $(BUILD)/obj
+PROG    = LTris
+OUT     = dist/LTris
+THEME   = src/themes/Standard
+
+CXXSRC  = src/main.cpp src/vconfig.cpp src/sdl.cpp src/tools.cpp src/theme.cpp \
+          src/sprite.cpp src/view.cpp src/menu.cpp src/hiscores.cpp src/vbowl.cpp \
+          src/vgame.cpp
+CSRC    = libgame/list.c libgame/tools.c libgame/parser.c libgame/config.c \
+          libgame/chart.c libgame/cpu.c libgame/sdl.c libgame/event.c \
+          libgame/shrapnells.c libgame/bowl.c libgame/tetris.c
+AMIGA   = amiga_progdir amiga_screens stack pthread_stubs
+OBJS    = $(CXXSRC:%.cpp=$(OBJDIR)/%.o) $(CSRC:%.c=$(OBJDIR)/%.o) \
+          $(AMIGA:%=$(OBJDIR)/amiga/%.o)
+
+ICONS   = $(wildcard amiga/icons/*.info)
+
+all: $(BUILD)/$(PROG)
+
+$(BUILD)/$(PROG): $(OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+
+$(OBJDIR)/amiga/%.o: amiga/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -noixemul $(OPT) $(CPU) -I$(NDK) -Iamiga -Wall -Wextra -c -o $@ $<
+
+$(OBJDIR)/src/%.o: src/%.cpp $(wildcard src/*.h)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(OBJDIR)/libgame/%.o: libgame/%.c $(wildcard libgame/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# The theme for the drawer: pictures at 800x600, the rest as it is.
+$(BUILD)/theme.stamp: amiga/tools/shrink_theme.py $(wildcard $(THEME)/*)
+	rm -rf $(BUILD)/Standard && mkdir -p $(BUILD)/Standard
+	$(PYTHON) -I amiga/tools/shrink_theme.py $(THEME) $(BUILD)/Standard
+	touch $@
+
+dist: $(BUILD)/$(PROG) $(BUILD)/theme.stamp $(ICONS) AMIGA_PORT.md COPYING README
+	rm -rf $(OUT) && mkdir -p $(OUT)/themes
+	cp $(BUILD)/$(PROG) src/figures $(OUT)/
+	cp -r $(BUILD)/Standard $(OUT)/themes/Standard
+	cp AMIGA_PORT.md $(OUT)/ReadMe
+	cp README $(OUT)/README-ltris
+	cp COPYING $(OUT)/COPYING.txt
+	cp amiga/Licences.txt $(OUT)/Licences.txt
+	cp amiga/icons/LTris.info amiga/icons/ReadMe.info $(OUT)/
+	cp amiga/icons/ReadMe.info $(OUT)/README-ltris.info
+	cp amiga/icons/ReadMe.info $(OUT)/COPYING.txt.info
+	cp amiga/icons/ReadMe.info $(OUT)/Licences.txt.info
+	cp amiga/icons/Themes.info $(OUT)/themes.info
+	cp amiga/icons/Themes.info $(OUT)/themes/Standard.info
+	cp amiga/icons/LTris-drawer.info dist/LTris.info
+
+objs: $(OBJS)
+
+clean:
+	rm -rf $(BUILD) $(OUT) dist/LTris.info
+
+.PHONY: all dist objs clean

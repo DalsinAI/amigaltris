@@ -74,6 +74,21 @@ void View::init(string t, uint wmode, bool reinit)
 			reinit?_("(Re)"):"",t.c_str(),wmode);
 
 	/* determine resolution */
+#ifdef __amigaos__
+	/* Fixed 4:3 sizes: a 640x480 screen, or a window of 640x480,
+	 * 800x600 or 1024x768 on the Workbench. */
+	int sw = 640, sh = 480;
+	switch (wmode) {
+	case WM_MEDIUM:
+		sw = 800; sh = 600;
+		break;
+	case WM_LARGE:
+		sw = 1024; sh = 768;
+		break;
+	default:
+		break;
+	}
+#else
 	int idx = renderer.getDisplayId();
 	int sw = 640, sh = 480;
 	SDL_DisplayMode mode;
@@ -99,6 +114,7 @@ void View::init(string t, uint wmode, bool reinit)
 			sh = 360;
 		sw = sh / 3 * 4;
 	}
+#endif
 
 	/* (re)create main window */
 	renderer.create("LTris2", sw, sh, wmode == WM_FULLSCREEN);
@@ -410,9 +426,14 @@ void View::createMenus()
 	const int bufSizes[] = { 256, 512, 1024, 2048, 4096 };
 	const int channelNums[] = { 8, 16, 32 };
 	const char *cpuStyleNames[] = {_("Defensive"), _("Normal"), _("Aggressive")};
+#ifdef __amigaos__
+	const char *windowModeNames[] = { _("Screen 640x480"),
+		_("Window 640x480"), _("Window 800x600"), _("Window 1024x768") };
+#else
 	const char *windowModeNames[] = { _("Fullscreen"),
 			_("Small Window"), _("Medium Window"), _("Large Window")
 	};
+#endif
 
 	/* longer hints */
 	string hStartingLevel = _("This is your starting level which will be ignored " \
