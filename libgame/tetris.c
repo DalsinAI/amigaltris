@@ -23,6 +23,9 @@
 #include "shrapnells.h"
 #include "tetris.h"
 
+/* bowl.c (its prototype in bowl.h is commented out there) */
+void bowl_quick_game( Bowl *bowl, CPU_ScoreSet *bscores, int llimit );
+
 SDL_Surface *blocks = 0;
 SDL_Surface *previewpieces = 0;
 SDL_Surface *logo = 0;

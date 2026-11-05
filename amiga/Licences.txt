@@ -1,0 +1,33 @@
+LTris for AmigaOS 3.x: what is whose
+====================================
+
+The game
+--------
+LTris 2.0.4 (ltris2), (C) 2024-2025 Michael Speck, https://lgames.sourceforge.net.
+The program (src/) is GPL 3 or later; its game core (libgame/, from
+LTris 1) is GPL 2 or later; together they are GPL 3 or later
+(COPYING.txt).
+
+The data in themes/Standard
+---------------------------
+- wallpaper0-9.jpg: photographs from www.publicdomainpictures.net, public
+  domain (upstream's CREDITS: George Hodan, Charles Rondeau, jks Lola,
+  Karen Arnold, one unknown). Made 800x600 for this drawer.
+- f_normal.otf, f_bold.otf: Source Sans Pro, (C) 2010, 2012 Adobe,
+  SIL Open Font License 1.1 (themes/Standard/SIL-OFL.txt).
+- blocks.png, menu.png (made 800x600 here), cursor.png, the sound effects
+  (s_*.wav), theme.ini and figures: no notice of their own; they come
+  with the game in its GPL package, from its author, so they are taken
+  as GPL 3 or later, as the game.
+- The icons are drawn from the game's own ltris2.png.
+
+The Amiga port
+--------------
+amiga/ in the source (the progdir helper, the screens fix, stack and
+thread stubs, the build and the theme tool): the AmiCradle Team, GPL 2 or
+later, so GPL 3 or later as part of LTris.
+
+Linked in: SDL 2, SDL_image and SDL_mixer's program halves (zlib licence),
+SDL_ttf (zlib licence) with FreeType (the FreeType Licence, (C) The
+FreeType Project, www.freetype.org), from the OpenGPU developer kit;
+libnix and libstdc++ (GCC runtime exception) from GFOpenAmigaGCC.

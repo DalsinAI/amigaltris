@@ -170,19 +170,54 @@ public:
 	#define ALIGN_Y_BOTTOM	32
 #endif
 
+#ifdef __amigaos__
+/* A text drawn by Font::write, kept as textures: FreeType and a texture
+ * upload for every text, twice (shadow), every frame were far too slow
+ * on a 68k. */
+struct FontCacheEntry {
+	string str;
+	SDL_Color clr;
+	SDL_Texture *tex, *shadow;
+	int w, h;
+	unsigned gen; /* the renderer the textures belong to */
+	Uint32 used;
+};
+/* counts the renderers made: textures of an older one are gone */
+extern unsigned rendererGeneration;
+#endif
+
 class Font {
 protected:
 	TTF_Font *font;
 	SDL_Color clr;
 	int align;
 	int size;
+#ifdef __amigaos__
+	vector<FontCacheEntry> cache;
+	Uint32 useClock;
+	FontCacheEntry *cached(const string &str);
 public:
+	void clearCache();
+#endif
+public:
+#ifdef __amigaos__
+	Font() : font(0), align(0), size(0), useClock(0) {}
+	~Font() {
+		clearCache();
+		if (font)
+			TTF_CloseFont(font);
+	}
+#else
 	Font() : font(0), align(0), size(0) {}
 	~Font() {
 		if (font)
 			TTF_CloseFont(font);
 	}
+#endif
 	void free() {
+#ifdef __amigaos__
+		clearCache();
+#endif
 		if (font) {
 			TTF_CloseFont(font);
 			font = 0;
@@ -379,6 +414,20 @@ public:
 		memset(curstate,KS_RELEASED,sizeof(curstate));
 	}
 	const Uint8 *update();
+#ifdef __amigaos__
+	/* OpenGPU's SDL 2: the game's keys are followed from the key events
+	 * themselves (an event watch, and every event View::run polls), not
+	 * only SDL_GetKeyboardState, and a key pressed and let go between two
+	 * frames still counts as pressed for one frame. */
+	static void track(const SDL_Event &ev);
+	static void watch();
+	static bool watched; /* the event watch has seen key events */
+	/* SDL_PollEvent for View::run: takes one event the game cares about
+	 * per call and drops the rest of a flood (window, joystick axis and
+	 * older mouse motion events), which upstream's one event per frame
+	 * can't keep up with at a 68k's frame rate. */
+	static int poll(SDL_Event *ev);
+#endif
 	void forceKeyDown(int scancode) {
 		if (scancode < 0 || scancode >= SDL_NUM_SCANCODES)
 			return;

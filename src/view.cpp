@@ -74,6 +74,21 @@ void View::init(string t, uint wmode, bool reinit)
 			reinit?_("(Re)"):"",t.c_str(),wmode);
 
 	/* determine resolution */
+#ifdef __amigaos__
+	/* Fixed 4:3 sizes: a 640x480 screen, or a window of 640x480,
+	 * 800x600 or 1024x768 on the Workbench. */
+	int sw = 640, sh = 480;
+	switch (wmode) {
+	case WM_MEDIUM:
+		sw = 800; sh = 600;
+		break;
+	case WM_LARGE:
+		sw = 1024; sh = 768;
+		break;
+	default:
+		break;
+	}
+#else
 	int idx = renderer.getDisplayId();
 	int sw = 640, sh = 480;
 	SDL_DisplayMode mode;
@@ -99,12 +114,38 @@ void View::init(string t, uint wmode, bool reinit)
 			sh = 360;
 		sw = sh / 3 * 4;
 	}
+#endif
 
 	/* (re)create main window */
 	renderer.create("LTris2", sw, sh, wmode == WM_FULLSCREEN);
 
+#ifdef __amigaos__
+	/* Something to look at while the theme loads, and the time each
+	 * part of the start takes on the console. */
+	Uint32 t0 = SDL_GetTicks();
+	{
+		string fdir = string(DATADIR) + "/themes/" + t;
+		Font lf;
+		lf.load(fileExists(fdir + "/f_normal.otf") ? fdir + "/f_normal.otf" :
+			string(DATADIR) + "/themes/Standard/f_normal.otf",
+			renderer.ry2sy(0.05));
+		SDL_SetRenderTarget(mrc, NULL);
+		SDL_SetRenderDrawColor(mrc, 0, 0, 0, 255);
+		SDL_RenderClear(mrc);
+		lf.setAlign(ALIGN_X_CENTER | ALIGN_Y_CENTER);
+		lf.write(renderer.getWidth()/2, renderer.getHeight()/2,
+						_("Loading..."));
+		SDL_RenderPresent(mrc);
+		lf.free();
+	}
+	_loginfo("Window up %u ms after SDL started\n", (unsigned)t0);
+#endif
+
 	/* load theme */
 	theme.load(t, renderer);
+#ifdef __amigaos__
+	_loginfo("Theme loaded (%u ms)\n", (unsigned)(SDL_GetTicks() - t0));
+#endif
 
 	/* create menu structure */
 	createMenus();
@@ -112,6 +153,9 @@ void View::init(string t, uint wmode, bool reinit)
 	/* set label stuff */
 	lblCredits1.setText(theme.fTooltip, "http://lgames.sf.net");
 	lblCredits2.setText(theme.fTooltip, string("v")+PACKAGE_VERSION);
+#ifdef __amigaos__
+	_loginfo("Menus made (%u ms)\n", (unsigned)(SDL_GetTicks() - t0));
+#endif
 
 	/* start demo or reinitialize current game */
 	if (reinit)
@@ -119,6 +163,9 @@ void View::init(string t, uint wmode, bool reinit)
 	else
 		game.init(GT_DEMO);
 	noGameYet = false;
+#ifdef __amigaos__
+	_loginfo("Game ready (%u ms)\n", (unsigned)(SDL_GetTicks() - t0));
+#endif
 }
 
 /** Main game loop. Handle events, update game and render view.
@@ -138,6 +185,9 @@ void View::run()
 	sprites.clear();
 	changingKey = false;
 	keystate.reset();
+#ifdef __amigaos__
+	Keystate::watch();
+#endif
 
 	fpsStart = SDL_GetTicks();
 	fpsCycles = 0;
@@ -152,7 +202,11 @@ void View::run()
 
 		/* handle global events */
 		newEvent = false;
+#ifdef __amigaos__
+		if (Keystate::poll(&ev)) {
+#else
 		if (SDL_PollEvent(&ev)) {
+#endif
 			newEvent = true;
 			if (ev.type == SDL_QUIT)
 				quitReceived = true;
@@ -287,6 +341,9 @@ void View::run()
 		if (fpsStart < SDL_GetTicks())
 			fps = 1000 * fpsCycles / (SDL_GetTicks() - fpsStart);
 		if (fpsCycles > 100) {
+#ifdef __amigaos__
+			_loginfo("%d frames a second\n", (int)fps);
+#endif
 			fpsCycles = 0;
 			fpsStart = SDL_GetTicks();
 		}
@@ -410,9 +467,14 @@ void View::createMenus()
 	const int bufSizes[] = { 256, 512, 1024, 2048, 4096 };
 	const int channelNums[] = { 8, 16, 32 };
 	const char *cpuStyleNames[] = {_("Defensive"), _("Normal"), _("Aggressive")};
+#ifdef __amigaos__
+	const char *windowModeNames[] = { _("Screen 640x480"),
+		_("Window 640x480"), _("Window 800x600"), _("Window 1024x768") };
+#else
 	const char *windowModeNames[] = { _("Fullscreen"),
 			_("Small Window"), _("Medium Window"), _("Large Window")
 	};
+#endif
 
 	/* longer hints */
 	string hStartingLevel = _("This is your starting level which will be ignored " \

@@ -256,6 +256,11 @@ int bowl_piece_can_drop(Bowl *bowl);
 
 void bowl_set_autoshift(Bowl *bowl, int delay, int speed);
 
+/* Used by bowl.c and tetris.c before their definitions (GCC 14 and later
+ * refuse implicit declarations). */
+int bowl_check_piece_position(Bowl *bowl, int x, int y, int r);
+int bowl_cpu_may_drop(Bowl *bowl);
+
 #ifdef __cplusplus
 };
 #endif

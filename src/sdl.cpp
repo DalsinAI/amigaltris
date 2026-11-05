@@ -18,6 +18,9 @@
 #include "sdl.h"
 
 SDL_Renderer *mrc = NULL; /* main window render context, got only one */
+#ifdef __amigaos__
+unsigned rendererGeneration = 0;
+#endif
 
 /** Main application window */
 
@@ -27,6 +30,9 @@ int Renderer::create(const string &title, int _w, int _h, int _full)
 
 	/* destroy old contexts if any */
 	destroy();
+#ifdef __amigaos__
+	rendererGeneration++;
+#endif
 
 	if (_w <= 0 || _h <= 0) { /* no width or height, use desktop setting */
 		int idx = getDisplayId();
@@ -40,6 +46,34 @@ int Renderer::create(const string &title, int _w, int _h, int _full)
 	h = _h;
 
 	_loginfo("Creating window with size %dx%d (%s)\n",w,h,_full?"fullscreen":"window");
+#ifdef __amigaos__
+	/* A screen of the window's own size (as SDL_WINDOW_FULLSCREEN gives
+	 * on OpenGPU), not the Workbench's desktop mode. */
+	mw = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
+				SDL_WINDOWPOS_CENTERED, w, h,
+				_full ? SDL_WINDOW_FULLSCREEN : 0);
+	if (mw == NULL) {
+		_logsdlerr();
+		return 0;
+	}
+	/* The game draws into target textures: ask for a renderer that has
+	 * them (opengpu), else SDL's software renderer, which always does. */
+	mr = SDL_CreateRenderer(mw, -1, SDL_RENDERER_ACCELERATED |
+					SDL_RENDERER_TARGETTEXTURE);
+	if (mr == NULL) {
+		_logsdlerr();
+		mr = SDL_CreateRenderer(mw, -1, SDL_RENDERER_SOFTWARE |
+					SDL_RENDERER_TARGETTEXTURE);
+	}
+	if (mr == NULL) {
+		_logsdlerr();
+		ret = 0;
+	} else {
+		SDL_RendererInfo info;
+		if (SDL_GetRendererInfo(mr, &info) == 0)
+			_loginfo("Renderer: %s\n", info.name);
+	}
+#else
  	if (_full) {
 		mw = SDL_CreateWindow(title.c_str(), 0,0,0,0,0);
 		if (mw)
@@ -55,6 +89,7 @@ int Renderer::create(const string &title, int _w, int _h, int _full)
 		_logsdlerr();
 		ret = 0;
 	}
+#endif
 	mrc = mr;
 
 	/* back to black */
@@ -287,7 +322,9 @@ int Texture::createShadow(Texture &img)
 	img.copy(0,0);
 
 	/* change and apply */
-	Uint32 pixels[w*h];
+	/* on the heap: a stack array of w*h words overruns a 68k's stack */
+	vector<Uint32> pixbuf(w*h);
+	Uint32 *pixels = pixbuf.data();
 	int pitch = w*sizeof(Uint32);
 	Uint8 r,g,b,a;
 	Uint32 pft = 0;
@@ -318,6 +355,9 @@ void Font::load(const string& fname, int sz) {
 		size = 0;
 	}
 
+#ifdef __amigaos__
+	clearCache();
+#endif
 	if ((font = TTF_OpenFont(fname.c_str(), sz)) == NULL) {
 		_logsdlerr();
 		return;
@@ -337,6 +377,113 @@ void Font::setColor(SDL_Color c) {
 void Font::setAlign(int a) {
 	align = a;
 }
+#ifdef __amigaos__
+void Font::clearCache()
+{
+	for (auto &e : cache)
+		if (e.gen == rendererGeneration && mrc) {
+			if (e.tex)
+				SDL_DestroyTexture(e.tex);
+			if (e.shadow)
+				SDL_DestroyTexture(e.shadow);
+		}
+	cache.clear();
+}
+
+FontCacheEntry *Font::cached(const string &str)
+{
+	FontCacheEntry *lru = NULL;
+	useClock++;
+	for (auto &e : cache) {
+		if (e.gen != rendererGeneration)
+			continue;
+		if (e.str == str && e.clr.r == clr.r && e.clr.g == clr.g &&
+				e.clr.b == clr.b && e.clr.a == clr.a) {
+			e.used = useClock;
+			return &e;
+		}
+	}
+	/* a stale entry, a free place, or the least used one */
+	for (auto &e : cache)
+		if (e.gen != rendererGeneration) {
+			lru = &e;
+			break;
+		}
+	if (!lru && cache.size() < 96) {
+		cache.push_back(FontCacheEntry());
+		lru = &cache.back();
+	} else if (!lru) {
+		lru = &cache[0];
+		for (auto &e : cache)
+			if (e.used < lru->used)
+				lru = &e;
+		if (lru->tex)
+			SDL_DestroyTexture(lru->tex);
+		if (lru->shadow)
+			SDL_DestroyTexture(lru->shadow);
+	}
+	lru->tex = lru->shadow = NULL;
+	lru->gen = rendererGeneration;
+	lru->used = useClock;
+	lru->str = str;
+	lru->clr = clr;
+	lru->w = lru->h = 0;
+
+	SDL_Color black = { 0,0,0,255 };
+	SDL_Surface *surf = TTF_RenderUTF8_Blended(font, str.c_str(), clr);
+	if (surf == NULL) {
+		_logsdlerr();
+		return lru;
+	}
+	lru->w = surf->w;
+	lru->h = surf->h;
+	if ((lru->tex = SDL_CreateTextureFromSurface(mrc, surf)) == NULL)
+		_logsdlerr();
+	SDL_FreeSurface(surf);
+	if ((surf = TTF_RenderUTF8_Blended(font, str.c_str(), black)) != NULL) {
+		if ((lru->shadow = SDL_CreateTextureFromSurface(mrc, surf)) == NULL)
+			_logsdlerr();
+		SDL_FreeSurface(surf);
+	}
+	return lru;
+}
+
+void Font::write(int x, int y, const string& str, int alpha) {
+	if (font == 0 || str.empty())
+		return;
+
+	FontCacheEntry *e = cached(str);
+	if (!e->tex)
+		return;
+
+	SDL_Rect drect;
+	if (align & ALIGN_X_LEFT)
+		drect.x = x;
+	else if (align & ALIGN_X_RIGHT)
+		drect.x = x - e->w;
+	else
+		drect.x = x - e->w/2; /* center */
+	if (align & ALIGN_Y_TOP)
+		drect.y = y;
+	else if (align & ALIGN_Y_BOTTOM)
+		drect.y = y - e->h;
+	else
+		drect.y = y - e->h/2;
+	drect.w = e->w;
+	drect.h = e->h;
+
+	/* do a shadow first */
+	if (e->shadow) {
+		SDL_Rect drect2 = drect;
+		drect2.x += size/10;
+		drect2.y += size/10;
+		SDL_SetTextureAlphaMod(e->shadow, alpha/2);
+		SDL_RenderCopy(mrc, e->shadow, NULL, &drect2);
+	}
+	SDL_SetTextureAlphaMod(e->tex, alpha);
+	SDL_RenderCopy(mrc, e->tex, NULL, &drect);
+}
+#else
 void Font::write(int x, int y, const string& _str, int alpha) {
 	if (font == 0)
 		return;
@@ -394,6 +541,7 @@ void Font::write(int x, int y, const string& _str, int alpha) {
 	SDL_FreeSurface(surf);
 	SDL_DestroyTexture(tex);
 }
+#endif
 void Font::writeText(int x, int y, const string& _text, int wrapwidth, int alpha)
 {
 	if (font == 0)
@@ -541,6 +689,81 @@ const Uint8 *Gamepad::update() {
  * press a key up/down occurs (or during key release a key down/up)
  * it is not registered which although at high frame rates it should
  * be impossible to hit keys that fast? */
+#ifdef __amigaos__
+static Uint8 amigaKeys[SDL_NUM_SCANCODES]; /* held, from the events */
+static Uint8 amigaTapped[SDL_NUM_SCANCODES]; /* went down since update() */
+
+void Keystate::track(const SDL_Event &ev)
+{
+	if (ev.type != SDL_KEYDOWN && ev.type != SDL_KEYUP)
+		return;
+	int sc = ev.key.keysym.scancode;
+	if (sc <= 0 || sc >= SDL_NUM_SCANCODES)
+		return;
+	if (ev.type == SDL_KEYDOWN) {
+		amigaKeys[sc] = 1;
+		if (!ev.key.repeat)
+			amigaTapped[sc] = 1;
+	} else
+		amigaKeys[sc] = 0;
+}
+
+bool Keystate::watched = false;
+
+static int SDLCALL amigaKeyWatch(void *data, SDL_Event *ev)
+{
+	(void)data;
+	if (ev->type == SDL_KEYDOWN || ev->type == SDL_KEYUP) {
+		Keystate::watched = true;
+		Keystate::track(*ev);
+	}
+	return 1;
+}
+
+int Keystate::poll(SDL_Event *ev)
+{
+	SDL_Event e, motion;
+	bool haveMotion = false;
+	for (int n = 0; n < 512 && SDL_PollEvent(&e); n++) {
+		if (!watched)
+			track(e);
+		switch (e.type) {
+		case SDL_QUIT:
+		case SDL_KEYDOWN:
+		case SDL_KEYUP:
+		case SDL_TEXTINPUT:
+		case SDL_MOUSEBUTTONDOWN:
+		case SDL_MOUSEBUTTONUP:
+		case SDL_MOUSEWHEEL:
+		case SDL_JOYBUTTONDOWN:
+		case SDL_JOYBUTTONUP:
+			*ev = e;
+			return 1;
+		case SDL_MOUSEMOTION:
+			motion = e;
+			haveMotion = true;
+			break;
+		default:
+			break;
+		}
+	}
+	if (haveMotion) {
+		*ev = motion;
+		return 1;
+	}
+	return 0;
+}
+
+void Keystate::watch()
+{
+	static bool added = false;
+	if (!added) {
+		SDL_AddEventWatch(amigaKeyWatch, NULL);
+		added = true;
+	}
+}
+#endif
+
 const Uint8 *Keystate::update()
 {
 	int numkeys;
@@ -548,6 +771,19 @@ const Uint8 *Keystate::update()
 
 	SDL_PumpEvents();
 	ks = SDL_GetKeyboardState(&numkeys);
+#ifdef __amigaos__
+	/* SDL's own state, the key events seen, and the keys tapped */
+	static Uint8 merged[SDL_NUM_SCANCODES];
+	if (numkeys > SDL_NUM_SCANCODES)
+		numkeys = SDL_NUM_SCANCODES;
+	for (int id = 0; id < SDL_NUM_SCANCODES; id++) {
+		merged[id] = amigaKeys[id] || amigaTapped[id] ||
+				(id < numkeys && ks && ks[id]);
+		amigaTapped[id] = 0;
+	}
+	ks = merged;
+	numkeys = SDL_NUM_SCANCODES;
+#endif
 
 	if (numkeys > SDL_NUM_SCANCODES)
 		numkeys = SDL_NUM_SCANCODES; /* should not happen, for safety */
