@@ -94,8 +94,6 @@ dist: $(BUILD)/$(PROG) $(BUILD)/theme.stamp $(ICONS) AMIGA_PORT.md COPYING READM
 	cp amiga/icons/ReadMe.info $(OUT)/README-ltris.info
 	cp amiga/icons/ReadMe.info $(OUT)/COPYING.txt.info
 	cp amiga/icons/ReadMe.info $(OUT)/Licences.txt.info
-	cp amiga/icons/Themes.info $(OUT)/themes.info
-	cp amiga/icons/Themes.info $(OUT)/themes/Standard.info
 	cp amiga/icons/LTris-drawer.info dist/LTris.info
 
 objs: $(OBJS)
